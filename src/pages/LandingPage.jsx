@@ -86,7 +86,7 @@ export const LandingPage = () => {
               <DotPattern
                 className={cn(
                   "[mask-image:radial-gradient(800px_circle_at_center,white,transparent)]",
-                  "absolute inset-0 z-[-1]"
+                  "absolute inset-0 z-0" // Change from z-[-1] to z-0
                 )}
               />
             </motion.div>
