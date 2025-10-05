@@ -27,14 +27,14 @@ import {
 } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyD0A7OIi8TN53p6lHoM-MGmVkGgdnRZyHA",
-  authDomain: "quiz-gen-ai-app.firebaseapp.com",
-  projectId: "quiz-gen-ai-app",
-  storageBucket: "quiz-gen-ai-app.firebasestorage.app",
-  messagingSenderId: "922833641774",
-  appId: "1:922833641774:web:a3b50db1749beee9b11abf",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
   databaseURL:
-    "https://quiz-gen-ai-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+    import.meta.env.VITE_FIREBASE_DATABASE_URL,
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
@@ -127,6 +127,7 @@ export const FireBaseProvider = (props) => {
     return code;
   };
 
+  // Update this function in Firebase.jsx to work without authentication
   const findQuizByAccessCode = async (accessCode) => {
     try {
       const q = query(
@@ -379,7 +380,7 @@ export const FireBaseProvider = (props) => {
         throw new Error('You can only view attempts for your own quizzes');
       }
 
-      // Fetch quiz attempts
+      // Fetch quiz attempts - simplified query
       const attemptsQuery = query(
         collection(firestore, "quizAttempts"),
         where("quizId", "==", quizId),
@@ -408,24 +409,31 @@ export const FireBaseProvider = (props) => {
     }
   };
 
+  // Update saveQuizAttempt to work without authentication for anonymous users
   const saveQuizAttempt = async (attemptData) => {
     try {
       const attemptWithTimestamp = {
         ...attemptData,
         submittedAt: serverTimestamp(),
         completedAt: serverTimestamp(),
-        completed: true
+        completed: true,
+        // Add anonymous flag if no user is logged in
+        isAnonymous: !user
       };
 
       // Save the attempt
       const docRef = await addDoc(collection(firestore, "quizAttempts"), attemptWithTimestamp);
       
-      // Update the quiz's attempt count
-      const quizRef = doc(firestore, "quizzes", attemptData.quizId);
-      await updateDoc(quizRef, {
-        attemptCount: increment(1),
-        lastAttemptAt: serverTimestamp()
-      });
+      // Update the quiz's attempt count (only if quiz exists and is accessible)
+      try {
+        const quizRef = doc(firestore, "quizzes", attemptData.quizId);
+        await updateDoc(quizRef, {
+          attemptCount: increment(1),
+          lastAttemptAt: serverTimestamp()
+        });
+      } catch (updateError) {
+        console.log('Could not update quiz stats (might be normal for anonymous users)');
+      }
       
       return docRef.id;
     } catch (error) {

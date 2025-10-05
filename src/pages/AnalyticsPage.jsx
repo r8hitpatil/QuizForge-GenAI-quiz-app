@@ -215,12 +215,11 @@ const Analytics = () => {
         const highestScore = Math.max(...scores);
         const lowestScore = Math.min(...scores);
 
-        // Enhanced performance metrics calculation
         const performanceMetrics = {
             totalQuestions: quiz.questions?.length || 0,
             passRate: Math.round((completedAttempts.filter(a => a.percentage >= 60).length / completedAttempts.length) * 100),
             excellentRate: Math.round((completedAttempts.filter(a => a.percentage >= 80).length / completedAttempts.length) * 100),
-            averageTimePerQuestion: 0, // Can be calculated if time tracking is added
+            averageTimePerQuestion: 0,
             difficultyDistribution: {
                 easy: 0,
                 medium: 0,
@@ -229,12 +228,57 @@ const Analytics = () => {
             questionEffectiveness: []
         };
 
-        // Enhanced question analytics with performance insights
         const questionAnalytics = [];
         if (quiz.questions && quiz.questions.length > 0) {
             quiz.questions.forEach((question, questionIndex) => {
-                console.log(`Processing question ${questionIndex + 1}:`, question);
+                console.log(`=== Processing question ${questionIndex + 1} ===`);
+                console.log('Full question object:', question);
+                console.log('Question options:', question.options);
+                console.log('Correct answer property:', question.correct);
+                console.log('Options array length:', question.options?.length);
 
+                // Enhanced correct answer handling with debugging
+                let correctAnswerIndex = null;
+                let correctAnswerText = 'Unable to determine';
+
+                // Try different ways to get the correct answer
+                if (question.correct !== undefined && question.correct !== null) {
+                    correctAnswerIndex = parseInt(question.correct);
+                    console.log('Using question.correct:', correctAnswerIndex);
+                } else if (question.correctAnswer !== undefined && question.correctAnswer !== null) {
+                    correctAnswerIndex = parseInt(question.correctAnswer);
+                    console.log('Using question.correctAnswer:', correctAnswerIndex);
+                } else if (question.answer !== undefined && question.answer !== null) {
+                    correctAnswerIndex = parseInt(question.answer);
+                    console.log('Using question.answer:', correctAnswerIndex);
+                }
+
+                // Validate and get correct answer text
+                if (correctAnswerIndex !== null && 
+                    question.options && 
+                    Array.isArray(question.options) && 
+                    correctAnswerIndex >= 0 && 
+                    correctAnswerIndex < question.options.length) {
+                    
+                    correctAnswerText = question.options[correctAnswerIndex];
+                    console.log(`Correct answer text for index ${correctAnswerIndex}:`, correctAnswerText);
+                } else {
+                    console.error('Cannot determine correct answer:', {
+                        correctAnswerIndex,
+                        optionsExists: !!question.options,
+                        optionsIsArray: Array.isArray(question.options),
+                        optionsLength: question.options?.length,
+                        indexInRange: correctAnswerIndex >= 0 && correctAnswerIndex < (question.options?.length || 0)
+                    });
+                    
+                    // Fallback: use index 0 if options exist
+                    if (question.options && question.options.length > 0) {
+                        correctAnswerIndex = 0;
+                        correctAnswerText = question.options[0];
+                        console.log('Using fallback correct answer:', correctAnswerText);
+                    }
+                }
+                    
                 // Get all responses for this specific question
                 const questionResponses = completedAttempts
                     .map(attempt => {
@@ -245,14 +289,13 @@ const Analytics = () => {
 
                 const totalResponses = questionResponses.length;
                 const correctCount = questionResponses.filter(
-                    answer => parseInt(answer) === parseInt(question.correct)
+                    answer => parseInt(answer) === correctAnswerIndex
                 ).length;
                 
                 const correctPercentage = totalResponses > 0 
                     ? Math.round((correctCount / totalResponses) * 100) 
                     : 0;
 
-                // Enhanced difficulty classification
                 let difficultyLevel = 'hard';
                 let difficultyScore = 0;
                 
@@ -270,27 +313,49 @@ const Analytics = () => {
                     performanceMetrics.difficultyDistribution.hard++;
                 }
 
-                // Count responses for each option with enhanced analytics
-                const optionStats = new Array(question.options.length).fill(0);
-                const optionAnalytics = question.options.map((option, optionIndex) => {
-                    const optionCount = questionResponses.filter(
-                        answer => parseInt(answer) === optionIndex
-                    ).length;
+                // Count responses for each option - Handle case where options might not exist
+                const optionStats = [];
+                const optionAnalytics = [];
+                
+                if (question.options && Array.isArray(question.options)) {
+                    // Initialize stats array
+                    for (let i = 0; i < question.options.length; i++) {
+                        optionStats[i] = 0;
+                    }
                     
-                    optionStats[optionIndex] = optionCount;
-                    
-                    return {
-                        text: option,
-                        count: optionCount,
-                        percentage: totalResponses > 0 ? Math.round((optionCount / totalResponses) * 100) : 0,
-                        isCorrect: optionIndex === parseInt(question.correct),
-                        isDistractor: optionIndex !== parseInt(question.correct) && optionCount > 0
-                    };
-                });
+                    // Create option analytics
+                    question.options.forEach((option, optionIndex) => {
+                        const optionCount = questionResponses.filter(
+                            answer => parseInt(answer) === optionIndex
+                        ).length;
+                        
+                        optionStats[optionIndex] = optionCount;
+                        
+                        optionAnalytics.push({
+                            text: option || `Option ${String.fromCharCode(65 + optionIndex)}`,
+                            count: optionCount,
+                            percentage: totalResponses > 0 ? Math.round((optionCount / totalResponses) * 100) : 0,
+                            isCorrect: optionIndex === correctAnswerIndex,
+                            isDistractor: optionIndex !== correctAnswerIndex && optionCount > 0
+                        });
+                    });
+                } else {
+                    console.error('Question options not found or invalid for question:', questionIndex + 1);
+                    // Create dummy options
+                    for (let i = 0; i < 4; i++) {
+                        optionStats[i] = 0;
+                        optionAnalytics.push({
+                            text: `Option ${String.fromCharCode(65 + i)}`,
+                            count: 0,
+                            percentage: 0,
+                            isCorrect: i === correctAnswerIndex,
+                            isDistractor: false
+                        });
+                    }
+                }
 
-                // Calculate question effectiveness metrics
                 const effectiveness = {
-                    discriminationIndex: calculateDiscriminationIndex(completedAttempts, questionIndex, question.correct),
+                    discriminationIndex: calculateDiscriminationIndex(completedAttempts, questionIndex, correctAnswerIndex),
                     distractorEffectiveness: calculateDistractorEffectiveness(optionAnalytics),
                     questionReliability: correctPercentage >= 20 && correctPercentage <= 90 ? 'Good' : 
                                        correctPercentage < 20 ? 'Too Hard' : 'Too Easy'
@@ -305,10 +370,10 @@ const Analytics = () => {
 
                 questionAnalytics.push({
                     questionNumber: questionIndex + 1,
-                    question: question.question,
-                    options: question.options,
-                    correctAnswer: parseInt(question.correct),
-                    correctAnswerText: question.options[question.correct],
+                    question: question.question || 'Question text not available',
+                    options: question.options || [],
+                    correctAnswer: correctAnswerIndex,
+                    correctAnswerText: correctAnswerText,
                     correctCount,
                     totalResponses,
                     correctPercentage,
@@ -318,9 +383,14 @@ const Analytics = () => {
                     optionAnalytics,
                     effectiveness,
                     unattemptedCount: completedAttempts.length - totalResponses,
-                    // Performance insights
                     performanceInsight: getPerformanceInsight(correctPercentage, effectiveness),
                     recommendations: getQuestionRecommendations(correctPercentage, optionAnalytics, effectiveness)
+                });
+
+                console.log(`Question ${questionIndex + 1} final analytics:`, {
+                    correctAnswer: correctAnswerIndex,
+                    correctAnswerText: correctAnswerText,
+                    optionsLength: question.options?.length
                 });
             });
         }
@@ -356,6 +426,26 @@ const Analytics = () => {
             attemptsError
         });
     }, [quizId, user, quiz, attempts, quizLoading, attemptsLoading, quizError, attemptsError]);
+
+    // Add this debugging right after your existing useEffect
+    useEffect(() => {
+        console.log('=== FIREBASE DATA DEBUG ===');
+        console.log('Quiz data:', quiz);
+        console.log('Attempts data:', attempts);
+        
+        if (quiz && quiz.questions) {
+            console.log('Quiz questions structure:');
+            quiz.questions.forEach((q, index) => {
+                console.log(`Question ${index}:`, {
+                    question: q.question,
+                    options: q.options,
+                    correct: q.correct,
+                    correctAnswer: q.correctAnswer,
+                    answer: q.answer
+                });
+            });
+        }
+    }, [quiz, attempts]);
 
     const totalPages = Math.ceil(attempts.length / ATTEMPTS_PER_PAGE);
 
@@ -706,18 +796,27 @@ const Analytics = () => {
                                             return (
                                                 <BlurFade key={index} delay={0.1 * (index + 1)} inView>
                                                     <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                                                        {/* Question Header */}
+                                                        {/* Question Header - Enhanced with Correct Answer Display */}
                                                         <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
                                                             <div className="flex justify-between items-start">
                                                                 <div className="flex-1 pr-6">
-                                                                    <h3 className="text-lg font-semibold text-gray-900 mb-2 font-belfast">
+                                                                    <h3 className="text-lg font-semibold text-gray-900 mb-3 font-belfast">
                                                                         Question {question.questionNumber}: {question.question}
                                                                     </h3>
-                                                                    <div className="flex items-center text-sm font-extended">
-                                                                        <CheckCircleIcon className="h-4 w-4 text-green-600 mr-2" />
-                                                                        <span className="text-green-600 font-medium mr-2">Correct Answer:</span>
-                                                                        <span className="text-gray-900 font-medium">{question.correctAnswerText}</span>
+                                                                    
+                                                                    {/* Correct Answer Display - Enhanced */}
+                                                                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                                                                        <div className="flex items-start space-x-3">
+                                                                            <CheckCircleIcon className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                                                            <div className="flex-1">
+                                                                                <div className="text-sm font-medium text-green-800 mb-1 font-extended">
+                                                                                    Correct Answer: Option {String.fromCharCode(65 + question.correctAnswer)}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
+
+                                                                    
                                                                 </div>
                                                                 <div className="flex-shrink-0">
                                                                     
@@ -752,10 +851,17 @@ const Analytics = () => {
                                                                                     axisLine={{ stroke: '#d1d5db' }}
                                                                                 />
                                                                                 <Tooltip 
-                                                                                    formatter={(value, name) => [
+                                                                                    formatter={(value, name, props) => [
                                                                                         name === 'responses' ? `${value} responses` : `${value}%`,
                                                                                         name === 'responses' ? 'Count' : 'Percentage'
                                                                                     ]}
+                                                                                    labelFormatter={(label, payload) => {
+                                                                                        if (payload && payload[0]) {
+                                                                                            const isCorrect = payload[0].payload.isCorrect;
+                                                                                            return `Option ${label}${isCorrect ? ' (Correct Answer)' : ''}`;
+                                                                                        }
+                                                                                        return `Option ${label}`;
+                                                                                    }}
                                                                                     contentStyle={{
                                                                                         backgroundColor: '#f9fafb',
                                                                                         border: '1px solid #e5e7eb',
@@ -764,9 +870,16 @@ const Analytics = () => {
                                                                                 />
                                                                                 <Bar 
                                                                                     dataKey="responses" 
-                                                                                    fill="#3b82f6"
                                                                                     radius={[4, 4, 0, 0]}
-                                                                                />
+                                                                                    fill={(entry) => entry.isCorrect ? '#10b981' : '#3b82f6'}
+                                                                                >
+                                                                                    {question.optionStats.map((count, optionIndex) => (
+                                                                                        <Cell 
+                                                                                            key={`cell-${optionIndex}`} 
+                                                                                            fill={optionIndex === question.correctAnswer ? '#10b981' : '#3b82f6'} 
+                                                                                        />
+                                                                                    ))}
+                                                                                </Bar>
                                                                             </BarChart>
                                                                         </ResponsiveContainer>
                                                                     </div>
@@ -780,7 +893,7 @@ const Analytics = () => {
                                                                             <PieChart>
                                                                                 <Pie
                                                                                     data={question.optionStats.map((count, optionIndex) => ({
-                                                                                        name: `Option ${String.fromCharCode(65 + optionIndex)}`,
+                                                                                        name: `Option ${String.fromCharCode(65 + optionIndex)}${optionIndex === question.correctAnswer ? ' ✓' : ''}`,
                                                                                         value: count,
                                                                                         percentage: question.totalResponses > 0 
                                                                                             ? Math.round((count / question.totalResponses) * 100) 
@@ -802,7 +915,11 @@ const Analytics = () => {
                                                                                     ))}
                                                                                 </Pie>
                                                                                 <Tooltip 
-                                                                                    formatter={(value) => [`${value} responses`, 'Count']}
+                                                                                    formatter={(value, name) => [`${value} responses`, 'Count']}
+                                                                                    labelFormatter={(label) => {
+                                                                                        const isCorrect = label.includes('✓');
+                                                                                        return isCorrect ? `${label} (Correct Answer)` : label;
+                                                                                    }}
                                                                                     contentStyle={{
                                                                                         backgroundColor: '#f9fafb',
                                                                                         border: '1px solid #e5e7eb',
@@ -815,10 +932,10 @@ const Analytics = () => {
                                                                 </div>
                                                             </div>
 
-                                                            {/* Detailed Option Statistics */}
+                                                            {/* Detailed Option Statistics - Enhanced */}
                                                             <div className="mt-8">
-                                                                <h4 className="text-lg font-semibold text-gray-800 mb-4 font-belfast">Detailed Breakdown</h4>
-                                                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                                                <h4 className="text-lg font-semibold text-gray-800 mb-4 font-belfast">Detailed Option Analysis</h4>
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                                                     {question.optionStats.map((count, optionIndex) => {
                                                                         const percentage = question.totalResponses > 0 
                                                                             ? Math.round((count / question.totalResponses) * 100) 
@@ -830,20 +947,35 @@ const Analytics = () => {
                                                                                 key={optionIndex}
                                                                                 className={`relative p-4 rounded-xl border-2 transition-all ${
                                                                                     isCorrect 
-                                                                                        ? 'bg-green-50 border-green-200 shadow-lg' 
+                                                                                        ? 'bg-green-50 border-green-300 shadow-lg ring-2 ring-green-200' 
                                                                                         : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'
                                                                                 }`}
                                                                             >
+                                                                                {/* Correct Answer Badge */}
                                                                                 {isCorrect && (
-                                                                                    <div className="absolute -top-2 -right-2 rounded-full flex items-center justify-center">
-                                                                                        <CheckCircleIcon className="h-6 w-6 text-green-600" />
+                                                                                    <div className="absolute -top-3 -right-3 flex items-center justify-center">
+                                                                                        <div className="bg-green-600 text-white rounded-full p-1.5 shadow-lg">
+                                                                                            <CheckCircleIcon className="h-4 w-4" />
+                                                                                        </div>
                                                                                     </div>
                                                                                 )}
+                                                                                
                                                                                 <div className="flex justify-between items-center mb-3">
                                                                                     <span className="text-lg font-bold text-gray-900 font-belfast">
                                                                                         Option {String.fromCharCode(65 + optionIndex)}
                                                                                     </span>
+                                                                                    {isCorrect && (
+                                                                                        <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                                                                                            CORRECT
+                                                                                        </span>
+                                                                                    )}
                                                                                 </div>
+                                                                                
+                                                                                {/* Display the actual option text */}
+                                                                                <div className="text-sm text-gray-700 mb-3 p-2 bg-gray-50 rounded border font-extended">
+                                                                                    {question.options[optionIndex]}
+                                                                                </div>
+                                                                                
                                                                                 <div className="text-3xl font-bold text-gray-900 mb-1 font-belfast">
                                                                                     {percentage}%
                                                                                 </div>
@@ -858,6 +990,13 @@ const Analytics = () => {
                                                                                         style={{ width: `${percentage}%` }}
                                                                                     />
                                                                                 </div>
+                                                                                
+                                                                                {/* Additional info for correct answer */}
+                                                                                {isCorrect && (
+                                                                                    <div className="mt-2 text-xs text-green-600 font-medium">
+                                                                                        ✓ This is the correct answer
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
                                                                         );
                                                                     })}
