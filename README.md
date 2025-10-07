@@ -2,6 +2,13 @@
 
 A modern web application that allows users to create AI-generated quizzes and share them with others using access codes. Built with React, Firebase, and integrated AI capabilities.
 
+[Live Link](https://quiz-gen-ai-app.web.app)
+
+
+<img width="1893" height="901" alt="image" src="https://github.com/user-attachments/assets/040d7b92-5b08-4ee2-b690-12cbb2269a42" />
+
+
+
 ## 🚀 Features
 
 - **AI-Generated Quizzes**: Create comprehensive quiz questions using AI with just a topic or prompt
